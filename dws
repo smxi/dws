@@ -143,7 +143,7 @@ show_version()
 script_self_updater(){
 	local scriptLocation=$( which $SCRIPT_NAME )
 	local scriptOwner=$( ls -l $scriptLocation | awk '{print $3}' )
-	local downloadUrl="http://smxi.org/$SCRIPT_NAME"
+	local downloadUrl="https://smxi.org/$SCRIPT_NAME"
 	local scriptData='' newVersion=''
 	local scriptUser=$( whoami )
 	
