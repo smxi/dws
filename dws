@@ -273,7 +273,7 @@ print_distro_ranking()
 # 		dwDistroStatus=$( grep -iEA 1 "<a href=\"$item\">" <<< "$dwWorkingData" | grep -ioE '(aup|alevel|adown)\.png' )
 		
 		dwWorkingData=$( grep -iE -B 1 -A 1 "<td class=\"phr2\"><a href=\"$item(\?[^\"]*)?\">" <<< "$DW_PAGE_DATA" | grep -iEA 2 "<th class=\"phr1\">[0-9]+</th>" | grep -vE '^[\-]+$' )
-		echo "$dwWorkingData"
+		#echo "$dwWorkingData"
 		# slice out just the ranking number from those 3 lines
 		dwDistroRanking=$( grep -iE "<th class=\"phr1\">[0-9]+</th>" <<< "$dwWorkingData" | grep -Eo '>[0-9]+<' | grep -Eo [0-9]+ )
 		# then the hits and status indicator, using the line after the distro name line
