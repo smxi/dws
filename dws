@@ -3,8 +3,8 @@
 # Script Name: dws
 # Description: show distrowatch distro position for different distros/time frames.
 # Author: Harald Hope
-# Version: 1.4.0
-# Date: 2018-10-20
+# Version: 1.4.1
+# Date: 2018-10-21
 # License: GPL 3 or later
 # Bugs, issues
 # Support forums: https://techpatterns.com/forums/forum-33.html
@@ -28,7 +28,7 @@ DISTROS='debian'
 # TIME_SPAN='6'
 TIME_SPAN='7'
 # range can be +-99
-RANGE=0
+RANGE=10
 RANGE_START=0
 ## do not change anything under this point
 B_DEBUG_1='false'
@@ -89,6 +89,7 @@ get_options()
 	do
 		case $opt in
 			d)	DISTROS=$( tr ',' ' ' <<< $OPTARG )
+			   RANGE=0
 				;;
 			D)	B_DEBUG_1='true'
 				;;
@@ -96,12 +97,6 @@ get_options()
 				;;
 			r)	if [ -n "$( grep -E '^[-\+]?[1-9][0-9]?$' <<< $OPTARG )" ];then
 					RANGE=$OPTARG
-					if [ $RANGE -lt 0 ];then
-						RANGE_START=100
-						RANGE=$((0 - $RANGE))
-					else
-						RANGE=$(( $RANGE + 0 ))
-					fi
 				else
 					error_handler 12 "$OPTARG"
 				fi
@@ -120,6 +115,12 @@ get_options()
 				;;
 		esac
 	done
+	if [ $RANGE -lt 0 ];then
+		RANGE_START=100
+		RANGE=$((0 - $RANGE))
+	else
+		RANGE=$(( $RANGE + 0 ))
+	fi
 }
 
 ## Script Main Data Get/Print
@@ -185,8 +186,8 @@ get_dw_data()
 
 generate_distro_ranking()
 {
-	local working_data='' line_data='' output='' distro='' a_output=()
-	local char_count=0 max_count=0 counter=0 item_nu=0 
+	local Working_Data='' line_data='' output='' distro='' a_output=()
+	local char_count=0 Max_Count=0 counter=0 item_nu=0 
 	
 	echo "Distrowatch.com $TIME_TEXT rankings:"
 	# first get max length of distro name to set printf
@@ -194,32 +195,32 @@ generate_distro_ranking()
 		for distro in $DISTROS
 		do
 			char_count=$(wc -c <<< $distro)
-			if [ "$char_count" -gt "$max_count" ];then
-				max_count=$char_count
+			if [ "$char_count" -gt "$Max_Count" ];then
+				Max_Count=$char_count
 			fi
 		done
-		max_count=$((max_count+4))
+		Max_Count=$((Max_Count+6))
 		for distro in $DISTROS; do
-			working_data=$( grep -iE -B 1 -A 1 "<td class=\"phr2\"><a href=\"$distro(\?[^\"]*)?\">" <<< "$DW_PAGE_DATA" | grep -iEA 2 "<th class=\"phr1\">[0-9]+</th>" | grep -vE '^[\-]+$' )
-			#echo "$working_data"
-			working_data="$( sed 's/\"/~~/g' <<< "$working_data")"
-			line_data=$(get_distro_data "$distro" "$max_count" "$working_data")
+			Working_Data=$( grep -iE -B 1 -A 1 "<td class=\"phr2\"><a href=\"$distro(\?[^\"]*)?\">" <<< "$DW_PAGE_DATA" | grep -iEA 2 "<th class=\"phr1\">[0-9]+</th>" | grep -vE '^[\-]+$' )
+			#echo "$Working_Data"
+			Working_Data="$( sed 's/\"/~~/g' <<< "$Working_Data")"
+			line_data=$(get_distro_data "$distro")
 			a_output[$counter]="$line_data"
 			((counter++))
 		done
 	else
-		max_count=15
+		Max_Count=17
 		while [ "$counter" -lt "$RANGE" ];do
 			if [ $RANGE_START -eq 100 ];then
 				item_nu=$((100 - $RANGE + $counter + 1))
 			else
 				item_nu=$((1 + $counter))
 			fi
-			working_data=$( grep -iE -A 2 "<th class=\"phr1\">$item_nu</th>" <<< "$DW_PAGE_DATA" )
-			if [ -n "$working_data" ];then
-				distro=$( grep -iE '<td class="phr2">' <<< "$working_data" | sed -E 's/.*<a href="([^"?]+)(\?[^\"]*)?">.*/\1/' )
-				working_data="$( sed 's/\"/~~/g' <<< "$working_data")"
-				line_data=$(get_distro_data "$distro" "$max_count" "$working_data")
+			Working_Data=$( grep -iE -A 2 "<th class=\"phr1\">$item_nu</th>" <<< "$DW_PAGE_DATA" )
+			if [ -n "$Working_Data" ];then
+				distro=$( grep -iE '<td class="phr2">' <<< "$Working_Data" | sed -E 's/.*<a href="([^"?]+)(\?[^\"]*)?">.*/\1/' )
+				Working_Data="$( sed 's/\"/~~/g' <<< "$Working_Data")"
+				line_data=$(get_distro_data "$distro")
 				a_output[$counter]="$line_data"
 				# echo "$distro: $counter"
 				((counter++))
@@ -247,15 +248,17 @@ generate_distro_ranking()
 	fi
 }
 
-# $1 - distro name; $2 - max count; $3 - data string; 
+# $1 - distro name;
 get_distro_data(){
-	local hit_data='' line_data=''
+	local distro='' hit_data='' hits='' line_data='' ranking='' status=''
 	#echo "$3"
 	# <td class=~~phr2~~><a href=~~freebsd?frphr~~>FreeBSD</a></td>
-	local distro=$( grep -iEA 1 "<td class=~~phr2~~>" <<< "$3" | grep -Eo '>[^<]+</a></td>' | sed -e 's/>//' -e 's%</a></td>%%g' )
-	local ranking=$( grep -iE "<th class=~~phr1~~>[0-9]+</th>" <<< "$3" | grep -Eo '>[0-9]+<' | grep -Eo '[0-9]+' )
-	local hits=$( grep -iEA 1 "<a href=~~$1(\?[^~]*)?~~>" <<< "$3" | grep -Eo '>[0-9]+<' | grep -Eo '[0-9]+' )
-	local status=$( grep -iEA 1 "<a href=~~$1(\?[^~]*)?~~>" <<< "$3" | grep -ioE '(aup|alevel|adown)\.png' )
+	if [ -n "$Working_Data" ];then
+		distro=$( grep -iEA 1 "<td class=~~phr2~~>" <<< "$Working_Data" | grep -Eo '>[^<]+</a></td>' | sed -e 's/>//' -e 's%</a></td>%%g' )
+		ranking=$( grep -iE "<th class=~~phr1~~>[0-9]+</th>" <<< "$Working_Data" | grep -Eo '>[0-9]+<' | grep -Eo '[0-9]+' )
+		hits=$( grep -iEA 1 "<a href=~~$1(\?[^~]*)?~~>" <<< "$Working_Data" | grep -Eo '>[0-9]+<' | grep -Eo '[0-9]+' )
+		status=$( grep -iEA 1 "<a href=~~$1(\?[^~]*)?~~>" <<< "$Working_Data" | grep -ioE '(aup|alevel|adown)\.png' )
+	fi
 	if [ -z "$distro" ];then
 		distro=$1
 	fi
@@ -282,7 +285,7 @@ get_distro_data(){
 	fi
 	if [ "$B_DEBUG_1" == 'true' ];then
 		echo "Step 2: post wget data"
-		echo "$1 WorkingData: $3"
+		echo "$1 WorkingData: $Working_Data"
 		echo "distro: $distro"
 		echo "$1 ranking: $ranking"
 		echo "$1 hits: $hits"
@@ -291,17 +294,17 @@ get_distro_data(){
 		echo $LINE
 	fi
 	
-	if [ -z "$3" ];then
+	if [ -z "$Working_Data" ];then
 		if [ "$B_TTY" == 'true' ];then
-			line_data="$( printf "%-${2}s%s" "$distro:" "not ranked" )"
+			line_data="$( printf "%-${Max_Count}s%s" "$distro:" "not ranked" )"
 		else
 			line_data="$( printf "%s: %s" "$distro" "not ranked" )"
 		fi
 	else
 		if [ "$B_TTY" == 'true' ];then
-			line_data="$( printf "%-${2}s%s" "$distro:" "$ranking$hit_data" )"
+			line_data="$( printf "%-${Max_Count}s%s%s" "$distro:" "$ranking$hit_data" "\t[$1]" )"
 		else
-			line_data="$( printf "%s: %s" "$distro" "$ranking$hit_data" )"
+			line_data="$( printf "%s: %s%s" "$distro" "$ranking$hit_data" "\t[$1]" )"
 		fi
 	fi
 	echo "$line_data"
@@ -309,28 +312,47 @@ get_distro_data(){
 
 show_help(){
 	echo "$SELF_NAME distrowatch distro position script. Version: $VERSION
-Your default with no options is distro: $DISTROS - time span: $TIME_SPAN
+Your default with no options is range: $RANGE - time span: $TIME_SPAN
 $LINE
 $SELF_NAME script options ( any you want or none, like: $SELF_NAME -d arch -t 3 ):
--d - distrowatch distro as listed in right bar, no spaces, /, or dashes, remove them, ie:
-     PC-BSD must be: pcbsd (upper/lower case doesn't matter) - Sample: $SELF_NAME -d pcbsd
-     You can also check multiple distros, by creating a comma separated list, no spaces:
-     $SELF_NAME -d arch,opensolaris,debian
--r - report range (+-1-99). Top/bottom x. If negative, starts from 100, if positive, starts from 1
--t - time span: 7 30 (days) - Months: 3 6 12 - Years: 2002-$YEAR_LAST - Sample: $SELF_NAME -t 30
+-d - distrowatch distro as listed in right bar, no spaces, /, or dashes, 
+     remove them, ie: PC-BSD must be: pcbsd (upper/lower case doesn't matter)
+     Sample: $SELF_NAME -d pcbsd
+     You can also check multiple distros, by creating a comma separated list, 
+     no spaces: $SELF_NAME -d arch,opensolaris,debian,antix
+     -d overrides default range.
+-r - report range (+-1-99). Top/bottom x. If negative, starts from 100, if 
+     positive, starts from 1. $SELF_NAME without -t or -d defaults to range 10.
+     Sample: $SELF_NAME -r 20
+-t - time span: 7 30 (days) - Months: 3 6 12 - Years: 2002-$YEAR_LAST
+     Sample: $SELF_NAME -t 30
 -U - Update script to latest version
 -D - show debugging output
 -h - help menu
 -v - show $SELF_NAME current version
 $LINE
-Known exceptions to distro naming:
-Ubuntu Christian: -d ubuntuce
+Output format:
+From yeserday: + = rising; ~ = unchanged; - = falling. Does not show for year output.
+Print Distro Name: [ranking] (hits per day +~-) [working name, what you use for -d]
 $LINE
-You can change the script defaults at top of script variable settings to what you want,
-just change the values of these top variables and $SELF_NAME will show by default what you
-want to see with no arguments/options:
-DISTRO='debian'
-TIME_SPAN='7'
+You can change the script defaults at top of script variable settings to 
+what you want, just change the values of these top variables and $SELF_NAME 
+will show by default what you want to see with no arguments/options:
+DISTROS='debian,ubuntu,arch,antix' # show these distros by default
+# or
+RANGE=20 # show top 20 distros by default
+TIME_SPAN='6' # show last 6 months
+$LINE
+Some exceptions to -d values:
+Debian Edu: -d skolelinux
+DragonFly: dragonflybsd
+HandyLinux: -d handy
+Linux Lite: -d lite
+MakuluLinux: -d makulu
+MX Linux: -d mx
+SparkyLinux: -d sparky
+SUSE: -d sle
+Ubuntu Christian: -d ubuntuce
 "
 	exit 0
 }
