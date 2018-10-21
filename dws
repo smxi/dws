@@ -3,15 +3,16 @@
 # Script Name: dws
 # Description: show distrowatch distro position for different distros/time frames.
 # Author: Harald Hope
-# Version: 1.3.7
-# Date: 2018-10-19
+# Version: 1.4.0
+# Date: 2018-10-20
 # License: GPL 3 or later
 # Bugs, issues
 # Support forums: https://techpatterns.com/forums/forum-33.html
 # IRC: irc.oftc.net channel #smxi
 
 ## Changes:
-# 1.3.6 2018-10-19 - distrowatch table syntax change, they added ?frphr query string after distro id
+# 1.4.0 2018-10-20 - added -r range, shows top or bottom x distros
+# 1.3.7 2018-10-19 - distrowatch table syntax change, they added ?frphr query string after distro id
 # 1.3.5 2017-08-01 - bug fix, bash changed slightly
 # 1.3.4 2013-10-20 - removed deprecated 'seq'; made output less verbose and neater for multiple distros
 
@@ -20,20 +21,23 @@
 # case insensitive, sample: dw says: PC-BSD, make: pcbsd
 # can also have multiple, comma separated list, no spaces, like:
 # DISTRO='opensolaris,openbsd,pcbsd,arch'
-DISTRO='debian'
+DISTROS='debian'
 # options: 7 30 (day) - 3 6 12 (month)
 # years: 2002-<year before current year>
 # sample: TIME_SPAN='2008'
 # TIME_SPAN='6'
 TIME_SPAN='7'
-
+# range can be +-99
+RANGE=0
+RANGE_START=0
 ## do not change anything under this point
-B_DEBUGGER='false'
+B_DEBUG_1='false'
+B_DEBUG_2='false'
 DW_PAGE_DATA=''
 LINE='------------------------------------------------------------'
-SCRIPT_NAME='dws'
+SELF_NAME='dws'
 TIME_TEXT=''
-VERSION='1.3.7'
+VERSION='1.4.0'
 # get list of | separated years, 2 digit, 2002 to one less than present
 YEAR_LAST=$(( $( date +%Y ) - 1 ))
 YEARS=$( tr ' ' '|' <<< $( for (( i=2002;i<=$YEAR_LAST;i++));do echo -n "$i ";done | sed 's/\s$//' ) )
@@ -50,9 +54,9 @@ error_handler()
 	case $1 in
 		1)	message="Unsupported argument passed to script: -$2"
 			;;
-		2)	message="For some reason, even though the distro you requested: $DISTRO is listed at distrowatch.com,\nits ranking number is missing. This is probably a bug in $SCRIPT_NAME."
+		2)	message="For some reason, even though the distro you requested: $DISTROS is listed at distrowatch.com,\nits ranking number is missing. This is probably a bug in $SELF_NAME."
 			;;
-		3)	message="The distro you requested: $DISTRO - does not appear to be present in \nDistroWatch.com rankings, for the time period: $TIME_TEXT\nThe distro spelling must correspond to what you see in the right column\nranking section (minus any spaces, /, or dashes, case insensitive)."
+		3)	message="The distro you requested: $DISTROS - does not appear to be present in \nDistroWatch.com rankings, for the time period: $TIME_TEXT\nThe distro spelling must correspond to what you see in the right column\nranking section (minus any spaces, /, or dashes, case insensitive)."
 			;;
 		4)	message="Bad value passed to -t: $2 - Supported time spans: Days: 7 30 - Months: 3 6 12\nYears: $YEARS"
 			;;
@@ -62,13 +66,15 @@ error_handler()
 			;;
 		7)	message="This action requires root user status."
 			;;
-		8)	message="The $SCRIPT_NAME autoupdater reports file corruption, no #**EOF**# found in downloaded file.\Something went wrong with your wget download."
+		8)	message="The $SELF_NAME autoupdater reports file corruption, no #**EOF**# found in downloaded file.\Something went wrong with your wget download."
 			;;
-		9)	message="The $SCRIPT_NAME updater reports you don't have permission to carry out the requested file operation.\n(error: $2) This probably means root owns the file or its directory. Check to make sure."
+		9)	message="The $SELF_NAME updater reports you don't have permission to carry out the requested file operation.\n(error: $2) This probably means root owns the file or its directory. Check to make sure."
 			;;
 		10)	message="An unsupported user set value was used for TIME_SPAN: $TIME_SPAN"
 			;;
-		11)	message="$SCRIPT_NAME is not in your system \$PATH. Unable to update."
+		11)	message="$SELF_NAME is not in your system \$PATH. Unable to update."
+			;;
+		12)	message="Bad value passed to -r: $2 - Supported ranges: 1 to 99 or -1 to -99"
 			;;
 	esac
 	echo -e "Error $1: $message"
@@ -79,14 +85,26 @@ error_handler()
 get_options()
 {
 	local opt=''
-	while getopts :d:Dht:Uv opt
+	while getopts :d:Dhr:t:Uv opt
 	do
 		case $opt in
-			d)	DISTRO=$( tr ',' ' ' <<< $OPTARG )
+			d)	DISTROS=$( tr ',' ' ' <<< $OPTARG )
 				;;
-			D)	B_DEBUGGER='true'
+			D)	B_DEBUG_1='true'
 				;;
 			h)	show_help
+				;;
+			r)	if [ -n "$( grep -E '^[-\+]?[1-9][0-9]?$' <<< $OPTARG )" ];then
+					RANGE=$OPTARG
+					if [ $RANGE -lt 0 ];then
+						RANGE_START=100
+						RANGE=$((0 - $RANGE))
+					else
+						RANGE=$(( $RANGE + 0 ))
+					fi
+				else
+					error_handler 12 "$OPTARG"
+				fi
 				;;
 			t)	if [ -n "$( grep -Ei '^(3|6|7|12|30|'$YEARS')$' <<< $OPTARG )" ];then
 					TIME_SPAN=$OPTARG
@@ -94,7 +112,7 @@ get_options()
 					error_handler 4 "$OPTARG"
 				fi
 				;;
-			U)	script_self_updater
+			U)	self_updater
 				;;
 			v)	show_version 'opt'
 				;;
@@ -104,115 +122,37 @@ get_options()
 	done
 }
 
-show_help(){
-	echo "$SCRIPT_NAME distrowatch distro position script. Version: $VERSION
-Your default with no options is distro: $DISTRO - time span: $TIME_SPAN
-$LINE
-$SCRIPT_NAME script options ( any you want or none, like: $SCRIPT_NAME -d arch -t 3 ):
--d - distrowatch distro as listed in right bar, no spaces, /, or dashes, remove them, ie:
-     PC-BSD must be: pcbsd (upper/lower case doesn't matter) - Sample: $SCRIPT_NAME -d pcbsd
-     You can also check multiple distros, by creating a comma separated list, no spaces:
-     $SCRIPT_NAME -d arch,opensolaris,debian
--t - time span: 7 30 (days) - Months: 3 6 12 - Years: 2002-$YEAR_LAST - Sample: $SCRIPT_NAME -t 30
--U - Update script to latest version
--D - show debugging output
--h - help menu
--v - show $SCRIPT_NAME current version
-$LINE
-Known exceptions to distro naming:
-Ubuntu Christian: -d ubuntuce
-$LINE
-You can change the script defaults at top of script variable settings to what you want,
-just change the values of these top variables and $SCRIPT_NAME will show by default what you
-want to see with no arguments/options:
-DISTRO='debian'
-TIME_SPAN='7'
-"
-	exit 0
-}
-
-# args: $1 - opt (option fired, exit. Optional)
-show_version(){
-	echo "Your current $SCRIPT_NAME version is: $VERSION"
-	if [ "$1" == 'opt' ];then
-		exit 0
-	fi
-}
-
-script_self_updater(){
-	local scriptLocation=$( which $SCRIPT_NAME )
-	local scriptOwner=$( ls -l $scriptLocation | awk '{print $3}' )
-	local downloadUrl="https://smxi.org/$SCRIPT_NAME"
-	local scriptData='' newVersion=''
-	local scriptUser=$( whoami )
-	
-	if [ -n "$scriptLocation" ];then
-		# check for root. Note that if parent dir is owned by root
-		# if you try to mv a file to that dir, it will require root
-		# permissions as well, even if the file is owned by user.
-		if [ "$scriptUser" != "root" -a "$scriptOwner" == 'root' ] || [ "$scriptUser" != "root" -a "$scriptOwner" != "$scriptUser" ];then
-			error_handler 7
-		fi
-		echo $LINE
-		show_version 'update'
-		echo $LINE
-		echo "Starting $SCRIPT_NAME self updater."
-		# note that || case can't be in subshell...
-		scriptData="$( wget -O - $downloadUrl )" || error_handler 5 "$?"
-		# try it again just in case it fails
-		if [ -z "$( grep '#\*\*EOF\*\*#' <<< "$scriptData" )" ];then
-			echo "First download attempt failed, trying it again..."
-			echo
-			scriptData="$( wget -O - $downloadUrl )" || error_handler 5 "$?"
-		fi
-		# echoing the file data to the user owned file works but stops
-		# or damages script execution, so a restart didn't work right.
-		if [ -n "$( grep '#\*\*EOF\*\*#' <<< "$scriptData" )" ];then
-			echo "$scriptData" > $scriptLocation || error_handler 9 "echo: $?"
-			chmod +x $scriptLocation || error_handler 9 "chmod: $?"
-			newVersion=$(  grep '^#[[:space:]]Version:' $scriptLocation | awk '{print $3}' )
-			echo $LINE
-			echo "Success! Restart $SCRIPT_NAME to run updated version: $newVersion"
-			exit 0
-		else
-			error_handler 8
-		fi
-	else
-		error_handler 11
-	fi
-}
-
 ## Script Main Data Get/Print
 get_dw_data()
 {
-	local dwUrl='' dataSpan=''
+	local dw_url='' data_span=''
 	
 	# null defaults to 7 day
 	case $TIME_SPAN in
 		3)
-			dataSpan=13
+			data_span=13
 			TIME_TEXT='3 month'
 			;;
 		6)
-			dataSpan=26
+			data_span=26
 			TIME_TEXT='6 month'
 			;;
 		7|'') # default to 7 if null and unset in top prefs
-			dataSpan=1
+			data_span=1
 			TIME_TEXT='7 day'
 			;;
 		12)
-			dataSpan=52
+			data_span=52
 			TIME_TEXT='12 month'
 			;;
 		30)
-			dataSpan=4
+			data_span=4
 			TIME_TEXT='30 day'
 			;;
 		# note: using $YEARS doesn't work with ) method, so doing explicit test
 		200[2-9]|20[1-9][0-9])
 			if [ -n "$( grep -Ei '^('$YEARS')$' <<< $TIME_SPAN )" ];then
-				dataSpan=$TIME_SPAN
+				data_span=$TIME_SPAN
 				TIME_TEXT="$TIME_SPAN year"
 			else
 				error_handler 10
@@ -222,18 +162,20 @@ get_dw_data()
 			error_handler 10
 			;;
 	esac
-	
-	dwUrl="https://distrowatch.com/index.php?dataspan=$dataSpan"
-	
-	if [ "$B_DEBUGGER" == 'true' ];then
+	dw_url="https://distrowatch.com/index.php?dataspan=$data_span"
+	if [ "$B_DEBUG_1" == 'true' ];then
 		echo $LINE
 		echo "Debugger Started"
 		echo "Step 1: pre wget data"
-		echo "distro: $DISTRO :: timeFrame: $TIME_SPAN :: TIME_TEXT: $TIME_TEXT"
-		echo "dataSpan: $dataSpan :: download url: $dwUrl"
+		echo "distro: $DISTROS :: timeFrame: $TIME_SPAN :: TIME_TEXT: $TIME_TEXT"
+		echo "data_span: $data_span :: download url: $dw_url"
 	fi
-	DW_PAGE_DATA="$( wget -qO - $dwUrl )" || error_handler 5 "$?"
-	DW_PAGE_DATA="$( grep -iB 1 -A 1 '<td class="phr2">' <<< "$DW_PAGE_DATA" | grep -vE '^[\-]+$'  )"
+	if [ "$B_DEBUG_2" != 'true' ];then
+		DW_PAGE_DATA="$( wget -qO - $dw_url )" || error_handler 5 "$?"
+	else
+		DW_PAGE_DATA="$( cat ~/bin/scripts/dws/data.txt )"
+	fi
+	DW_PAGE_DATA="$( grep -iA2 '<th class="phr1">' <<< "$DW_PAGE_DATA" | grep -vE '^[\-]+$'  )"
 	# echo "$DW_PAGE_DATA"
 	# no wget failure, but null data
 	if [ -z "$DW_PAGE_DATA" ];then
@@ -241,115 +183,213 @@ get_dw_data()
 	fi
 }
 
-print_distro_ranking()
+generate_distro_ranking()
 {
-	local dwWorkingData='' dwDistroRanking='' dwDistroHits='' dwDistroStatus='' 
-	local bPrintLine='false' bIsMultiple='false' lineData='' item='' dwHitData=''
-	local charCount=0 maxCount=0 charCount=''
+	local working_data='' line_data='' output='' distro='' a_output=()
+	local char_count=0 max_count=0 counter=0 item_nu=0 
 	
-	if [ "$( wc -w <<< $DISTRO )" -gt 1 ];then
-		bIsMultiple='true'
-		echo "Distrowatch.com $TIME_TEXT rankings:"
-	fi
+	echo "Distrowatch.com $TIME_TEXT rankings:"
 	# first get max length of distro name to set printf
-	for item in $DISTRO
-	do
-		charCount=$(wc -c <<< $item)
-		if [ "$charCount" -gt "$maxCount" ];then
-			maxCount=$charCount
-		fi
-	done
-	((maxCount++))
-	
-	for item in $DISTRO
-	do
-		# slice out distro name line and 1 line above/below it, then the two lines below ranking
-# 		dwWorkingData=$( grep -iB 1 -A 1 "<td class=\"News\"><a href=\"$item\">" <<< "$DW_PAGE_DATA" | grep -iEA 2 "<th class=\"News\">[0-9]+</th>" )
-# 		
-# 		# slice out just the ranking number from those 3 lines
-# 		dwDistroRanking=$( grep -iE "<th class=\"News\">[0-9]+</th>" <<< "$dwWorkingData" | grep -Eo '[0-9]+' )
-# 		# then the hits and status indicator, using the line after the distro name line
-# 		dwDistroHits=$( grep -iEA 1 "<a href=\"$item\">" <<< "$dwWorkingData" | grep -Eo '>[0-9]+<' | grep -Eo '[0-9]+' )
-# 		dwDistroStatus=$( grep -iEA 1 "<a href=\"$item\">" <<< "$dwWorkingData" | grep -ioE '(aup|alevel|adown)\.png' )
-		
-		dwWorkingData=$( grep -iE -B 1 -A 1 "<td class=\"phr2\"><a href=\"$item(\?[^\"]*)?\">" <<< "$DW_PAGE_DATA" | grep -iEA 2 "<th class=\"phr1\">[0-9]+</th>" | grep -vE '^[\-]+$' )
-		#echo "$dwWorkingData"
-		# slice out just the ranking number from those 3 lines
-		dwDistroRanking=$( grep -iE "<th class=\"phr1\">[0-9]+</th>" <<< "$dwWorkingData" | grep -Eo '>[0-9]+<' | grep -Eo [0-9]+ )
-		# then the hits and status indicator, using the line after the distro name line
-		dwDistroHits=$( grep -iEA 1 "<a href=\"$item(\?[^\"]*)?\">" <<< "$dwWorkingData" | grep -Eo '>[0-9]+<' | grep -Eo '[0-9]+' )
-		dwDistroStatus=$( grep -iEA 1 "<a href=\"$item(\?[^\"]*)?\">" <<< "$dwWorkingData" | grep -ioE '(aup|alevel|adown)\.png' )
-		bPrintLine='false'
-		
-		if [ "$B_DEBUGGER" == 'true' ];then
-			echo "Step 2: post wget data"
-			echo "$item dwWorkingData: $dwWorkingData"
-			echo "$item dwDistroRanking: $dwDistroRanking"
-			echo "$item dwDistroHits: $dwDistroHits"
-			echo "$item dwDistroStatus: $dwDistroStatus"
-			echo "End Debugging"
-			echo $LINE
-		fi
-		# then make status nice for printout
-		case $dwDistroStatus in
-			aup.png)	
-				dwDistroStatus='+'
-				;;
-			adown.png)
-				dwDistroStatus='-'
-				;;
-			alevel.png)
-				dwDistroStatus='~'
-				;;
-		esac
-		# and set the status data
-		if [ -n "$dwDistroHits" ];then
-			# note that many gui irc clients make ) stuff into emoticons
-			if [ "$B_TTY" == 'true' ];then
-				dwHitData=" ($dwDistroHits$dwDistroStatus)"
-			else
-				dwHitData=" :: $dwDistroHits$dwDistroStatus"
+	if [ $RANGE -eq 0 ];then
+		for distro in $DISTROS
+		do
+			char_count=$(wc -c <<< $distro)
+			if [ "$char_count" -gt "$max_count" ];then
+				max_count=$char_count
 			fi
-		fi
-		if [ "$bIsMultiple" != 'true' ];then
-			# no distro ranking detected
-			if [ -z "$dwWorkingData" ];then
-				error_handler 3
-			# largely non-existent condition
-			elif [ -z "$dwDistroRanking" ];then
-				error_handler 2 "$timeFrame"
+		done
+		max_count=$((max_count+4))
+		for distro in $DISTROS; do
+			working_data=$( grep -iE -B 1 -A 1 "<td class=\"phr2\"><a href=\"$distro(\?[^\"]*)?\">" <<< "$DW_PAGE_DATA" | grep -iEA 2 "<th class=\"phr1\">[0-9]+</th>" | grep -vE '^[\-]+$' )
+			#echo "$working_data"
+			working_data="$( sed 's/\"/~~/g' <<< "$working_data")"
+			line_data=$(get_distro_data "$distro" "$max_count" "$working_data")
+			a_output[$counter]="$line_data"
+			((counter++))
+		done
+	else
+		max_count=15
+		while [ "$counter" -lt "$RANGE" ];do
+			if [ $RANGE_START -eq 100 ];then
+				item_nu=$((100 - $RANGE + $counter + 1))
 			else
-				bPrintLine='true'
-				lineData="$item distrowatch.com $TIME_TEXT ranking: $dwDistroRanking$dwHitData"
+				item_nu=$((1 + $counter))
 			fi
+			working_data=$( grep -iE -A 2 "<th class=\"phr1\">$item_nu</th>" <<< "$DW_PAGE_DATA" )
+			if [ -n "$working_data" ];then
+				distro=$( grep -iE '<td class="phr2">' <<< "$working_data" | sed -E 's/.*<a href="([^"?]+)(\?[^\"]*)?">.*/\1/' )
+				working_data="$( sed 's/\"/~~/g' <<< "$working_data")"
+				line_data=$(get_distro_data "$distro" "$max_count" "$working_data")
+				a_output[$counter]="$line_data"
+				# echo "$distro: $counter"
+				((counter++))
+				if [ $counter -gt $RANGE ];then
+					break
+				fi
+			fi
+		done
+	fi
+	if [ "${#a_output[@]}" -gt 0 ];then
+		n=${#a_output[@]}
+		if [ "$RANGE_START" -eq 100 -a "$RANGE" -gt 0 ];then
+			while [ "$n" -ge 0 ]; do
+				output="$output${a_output[$n]}\n"
+				n=$((n - 1))
+			done
 		else
-			# note: because irc can use various fonts with various spacing for space, just use regular output for irc
-			# no distro ranking detected.
-			if [ -z "$dwWorkingData" ];then
-				if [ "$B_TTY" == 'true' ];then
-					lineData="$( printf "%-${maxCount}s%s" "${item}:" "not ranked" )"
-				else
-					lineData="$( printf "%s: %s" "${item}" "not ranked" )"
-				fi
-			else
-				if [ "$B_TTY" == 'true' ];then
-					lineData="$( printf "%-${maxCount}s%s" "${item}:" "$dwDistroRanking$dwHitData" )"
-				else
-					lineData="$( printf "%s: %s" "${item}" "$dwDistroRanking$dwHitData" )"
-				fi
-			fi
-			bPrintLine='true'
+			local i=0
+			while [ "$i" -lt "$n" ]; do
+				output="$output${a_output[$i]}\n"
+				((i++))
+			done
 		fi
-		if [ "$bPrintLine" == 'true' ];then
-			echo "$lineData"
+		echo -e "$output"
+	fi
+}
+
+# $1 - distro name; $2 - max count; $3 - data string; 
+get_distro_data(){
+	local hit_data='' line_data=''
+	#echo "$3"
+	# <td class=~~phr2~~><a href=~~freebsd?frphr~~>FreeBSD</a></td>
+	local distro=$( grep -iEA 1 "<td class=~~phr2~~>" <<< "$3" | grep -Eo '>[^<]+</a></td>' | sed -e 's/>//' -e 's%</a></td>%%g' )
+	local ranking=$( grep -iE "<th class=~~phr1~~>[0-9]+</th>" <<< "$3" | grep -Eo '>[0-9]+<' | grep -Eo '[0-9]+' )
+	local hits=$( grep -iEA 1 "<a href=~~$1(\?[^~]*)?~~>" <<< "$3" | grep -Eo '>[0-9]+<' | grep -Eo '[0-9]+' )
+	local status=$( grep -iEA 1 "<a href=~~$1(\?[^~]*)?~~>" <<< "$3" | grep -ioE '(aup|alevel|adown)\.png' )
+	if [ -z "$distro" ];then
+		distro=$1
+	fi
+	# then make status nice for printout
+	case $status in
+		aup.png)	
+			status='+'
+			;;
+		adown.png)
+			status='-'
+			;;
+		alevel.png)
+			status='~'
+			;;
+	esac
+	# and set the status data
+	if [ -n "$hits" ];then
+		# note that many gui irc clients make ) stuff into emoticons
+		if [ "$B_TTY" == 'true' ];then
+			hit_data=" ($hits$status)"
+		else
+			hit_data=" :: $hits$status"
 		fi
-	done
+	fi
+	if [ "$B_DEBUG_1" == 'true' ];then
+		echo "Step 2: post wget data"
+		echo "$1 WorkingData: $3"
+		echo "distro: $distro"
+		echo "$1 ranking: $ranking"
+		echo "$1 hits: $hits"
+		echo "$1 status: $status"
+		echo "End Debugging"
+		echo $LINE
+	fi
+	
+	if [ -z "$3" ];then
+		if [ "$B_TTY" == 'true' ];then
+			line_data="$( printf "%-${2}s%s" "$distro:" "not ranked" )"
+		else
+			line_data="$( printf "%s: %s" "$distro" "not ranked" )"
+		fi
+	else
+		if [ "$B_TTY" == 'true' ];then
+			line_data="$( printf "%-${2}s%s" "$distro:" "$ranking$hit_data" )"
+		else
+			line_data="$( printf "%s: %s" "$distro" "$ranking$hit_data" )"
+		fi
+	fi
+	echo "$line_data"
+}
+
+show_help(){
+	echo "$SELF_NAME distrowatch distro position script. Version: $VERSION
+Your default with no options is distro: $DISTROS - time span: $TIME_SPAN
+$LINE
+$SELF_NAME script options ( any you want or none, like: $SELF_NAME -d arch -t 3 ):
+-d - distrowatch distro as listed in right bar, no spaces, /, or dashes, remove them, ie:
+     PC-BSD must be: pcbsd (upper/lower case doesn't matter) - Sample: $SELF_NAME -d pcbsd
+     You can also check multiple distros, by creating a comma separated list, no spaces:
+     $SELF_NAME -d arch,opensolaris,debian
+-r - report range (+-1-99). Top/bottom x. If negative, starts from 100, if positive, starts from 1
+-t - time span: 7 30 (days) - Months: 3 6 12 - Years: 2002-$YEAR_LAST - Sample: $SELF_NAME -t 30
+-U - Update script to latest version
+-D - show debugging output
+-h - help menu
+-v - show $SELF_NAME current version
+$LINE
+Known exceptions to distro naming:
+Ubuntu Christian: -d ubuntuce
+$LINE
+You can change the script defaults at top of script variable settings to what you want,
+just change the values of these top variables and $SELF_NAME will show by default what you
+want to see with no arguments/options:
+DISTRO='debian'
+TIME_SPAN='7'
+"
+	exit 0
+}
+
+# args: $1 - opt (option fired, exit. Optional)
+show_version(){
+	echo "Your current $SELF_NAME version is: $VERSION"
+	if [ "$1" == 'opt' ];then
+		exit 0
+	fi
+}
+
+self_updater(){
+	local self_location=$( which $SELF_NAME )
+	local self_owner=$( ls -l $self_location | awk '{print $3}' )
+	local download_url="https://smxi.org/$SELF_NAME"
+	local self_data='' new_version=''
+	local self_user=$( whoami )
+	
+	if [ -n "$self_location" ];then
+		# check for root. Note that if parent dir is owned by root
+		# if you try to mv a file to that dir, it will require root
+		# permissions as well, even if the file is owned by user.
+		if [ "$self_user" != "root" -a "$self_owner" == 'root' ] || [ "$self_user" != "root" -a "$self_owner" != "$self_user" ];then
+			error_handler 7
+		fi
+		echo $LINE
+		show_version 'update'
+		echo $LINE
+		echo "Starting $SELF_NAME self updater."
+		# note that || case can't be in subshell...
+		self_data="$( wget -O - $download_url )" || error_handler 5 "$?"
+		# try it again just in case it fails
+		if [ -z "$( grep '#\*\*EOF\*\*#' <<< "$self_data" )" ];then
+			echo "First download attempt failed, trying it again..."
+			echo
+			self_data="$( wget -O - $download_url )" || error_handler 5 "$?"
+		fi
+		# echoing the file data to the user owned file works but stops
+		# or damages script execution, so a restart didn't work right.
+		if [ -n "$( grep '#\*\*EOF\*\*#' <<< "$self_data" )" ];then
+			echo "$self_data" > $self_location || error_handler 9 "echo: $?"
+			chmod +x $self_location || error_handler 9 "chmod: $?"
+			new_version=$(  grep '^#[[:space:]]Version:' $self_location | awk '{print $3}' )
+			echo $LINE
+			echo "Success! Restart $SELF_NAME to run updated version: $new_version"
+			exit 0
+		else
+			error_handler 8
+		fi
+	else
+		error_handler 11
+	fi
 }
 
 ## Execute
 get_options "$@"
 get_dw_data
-print_distro_ranking
+generate_distro_ranking
 
 exit 0
 ###**EOF**###
