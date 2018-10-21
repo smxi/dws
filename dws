@@ -3,14 +3,17 @@
 # Script Name: dws
 # Description: show distrowatch distro position for different distros/time frames.
 # Author: Harald Hope
-# Version: 1.4.1
-# Date: 2018-10-21
+SELF_NAME='dws'
+SELF_VERSION='1.4.1'
+SELF_DATE='2018-10-21'
 # License: GPL 3 or later
-# Bugs, issues
+# Bugs, issues, problems
 # Support forums: https://techpatterns.com/forums/forum-33.html
 # IRC: irc.oftc.net channel #smxi
+# Issues: https://github.com/smxi/dws/issues
 
 ## Changes:
+# 1.4.1 2018-10-21 - cleaned up code, refactored, set default to -r 10; added /etc/dws.conf option
 # 1.4.0 2018-10-20 - added -r range, shows top or bottom x distros
 # 1.3.7 2018-10-19 - distrowatch table syntax change, they added ?frphr query string after distro id
 # 1.3.5 2017-08-01 - bug fix, bash changed slightly
@@ -20,7 +23,7 @@
 # distro: any distro you want, no spaces, dash, or /
 # case insensitive, sample: dw says: PC-BSD, make: pcbsd
 # can also have multiple, comma separated list, no spaces, like:
-# DISTRO='opensolaris,openbsd,pcbsd,arch'
+# DISTROS='opensolaris,openbsd,pcbsd,arch'
 DISTROS='debian'
 # options: 7 30 (day) - 3 6 12 (month)
 # years: 2002-<year before current year>
@@ -29,15 +32,15 @@ DISTROS='debian'
 TIME_SPAN='7'
 # range can be +-99
 RANGE=10
+
+# set dynamically, do not touch
 RANGE_START=0
 ## do not change anything under this point
 B_DEBUG_1='false'
 B_DEBUG_2='false'
-DW_PAGE_DATA=''
+DW_DATA=''
 LINE='------------------------------------------------------------'
-SELF_NAME='dws'
 TIME_TEXT=''
-VERSION='1.4.0'
 # get list of | separated years, 2 digit, 2002 to one less than present
 YEAR_LAST=$(( $( date +%Y ) - 1 ))
 YEARS=$( tr ' ' '|' <<< $( for (( i=2002;i<=$YEAR_LAST;i++));do echo -n "$i ";done | sed 's/\s$//' ) )
@@ -46,10 +49,13 @@ B_TTY='false'
 if tty >/dev/null;then
 	B_TTY='true'
 fi
+# override defaults here if you want
+if [ -f /etc/dws.conf ];then
+	source /etc/dws.conf
+fi
 
 # error number/extra data
-error_handler()
-{
+error_handler(){
 	local message=''
 	case $1 in
 		1)	message="Unsupported argument passed to script: -$2"
@@ -76,17 +82,17 @@ error_handler()
 			;;
 		12)	message="Bad value passed to -r: $2 - Supported ranges: 1 to 99 or -1 to -99"
 			;;
+		13)	message="Unknonwn error occurred, no results returned! Might be a bug."
+			;;
 	esac
 	echo -e "Error $1: $message"
 	exit $1
 }
 
 # args: $1 - "$@"
-get_options()
-{
+get_options(){
 	local opt=''
-	while getopts :d:Dhr:t:Uv opt
-	do
+	while getopts :d:Dhr:t:Uv opt;do
 		case $opt in
 			d)	DISTROS=$( tr ',' ' ' <<< $OPTARG )
 			   RANGE=0
@@ -115,6 +121,7 @@ get_options()
 				;;
 		esac
 	done
+	# +- to get rid of signed integers
 	if [ $RANGE -lt 0 ];then
 		RANGE_START=100
 		RANGE=$((0 - $RANGE))
@@ -124,8 +131,7 @@ get_options()
 }
 
 ## Script Main Data Get/Print
-get_dw_data()
-{
+get_dw_data(){
 	local dw_url='' data_span=''
 	
 	# null defaults to 7 day
@@ -166,76 +172,79 @@ get_dw_data()
 	dw_url="https://distrowatch.com/index.php?dataspan=$data_span"
 	if [ "$B_DEBUG_1" == 'true' ];then
 		echo $LINE
-		echo "Debugger Started"
-		echo "Step 1: pre wget data"
-		echo "distro: $DISTROS :: timeFrame: $TIME_SPAN :: TIME_TEXT: $TIME_TEXT"
+		echo "Debugger Step 1: pre wget data"
+		echo "DISTROS: $DISTROS :: RANGE: $RANGE :: RANGE_START: $RANGE_START"
+		echo "TIME_SPAN: $TIME_SPAN :: TIME_TEXT: $TIME_TEXT"
 		echo "data_span: $data_span :: download url: $dw_url"
+		echo $LINE
 	fi
 	if [ "$B_DEBUG_2" != 'true' ];then
-		DW_PAGE_DATA="$( wget -qO - $dw_url )" || error_handler 5 "$?"
+		DW_DATA="$( wget -qO - $dw_url )" || error_handler 5 "$?"
 	else
-		DW_PAGE_DATA="$( cat ~/bin/scripts/dws/data.txt )"
+		DW_DATA="$( cat ~/bin/scripts/dws/data.txt )"
 	fi
-	DW_PAGE_DATA="$( grep -iA2 '<th class="phr1">' <<< "$DW_PAGE_DATA" | grep -vE '^[\-]+$'  )"
-	# echo "$DW_PAGE_DATA"
+	DW_DATA="$( grep -iA2 '<th class="phr1">' <<< "$DW_DATA" | grep -vE '^[\-]+$'  )"
+	# echo "$DW_DATA"
 	# no wget failure, but null data
-	if [ -z "$DW_PAGE_DATA" ];then
+	if [ -z "$DW_DATA" ];then
 		error_handler 6
 	fi
 }
 
-generate_distro_ranking()
-{
+generate_distro_ranking(){
 	local Working_Data='' line_data='' output='' distro='' a_output=()
 	local char_count=0 Max_Count=0 counter=0 item_nu=0 
 	
 	echo "Distrowatch.com $TIME_TEXT rankings:"
 	# first get max length of distro name to set printf
+	# Max Count is calculated dynamically for non tty
+	if [ "$B_TTY" == 'true' ];then
+		if [ $RANGE -eq 0 ];then
+			for distro in $DISTROS; do
+				char_count=$(wc -c <<< $distro)
+				if [ "$char_count" -gt "$Max_Count" ];then
+					Max_Count=$char_count
+				fi
+			done
+			Max_Count=$((Max_Count+6))
+		else 
+			Max_Count=17
+		fi
+	fi
 	if [ $RANGE -eq 0 ];then
-		for distro in $DISTROS
-		do
-			char_count=$(wc -c <<< $distro)
-			if [ "$char_count" -gt "$Max_Count" ];then
-				Max_Count=$char_count
-			fi
-		done
-		Max_Count=$((Max_Count+6))
 		for distro in $DISTROS; do
-			Working_Data=$( grep -iE -B 1 -A 1 "<td class=\"phr2\"><a href=\"$distro(\?[^\"]*)?\">" <<< "$DW_PAGE_DATA" | grep -iEA 2 "<th class=\"phr1\">[0-9]+</th>" | grep -vE '^[\-]+$' )
+			Working_Data=$( grep -iE -B 1 -A 1 "<td class=\"phr2\"><a href=\"$distro(\?[^\"]*)?\">" <<< "$DW_DATA" | grep -iEA 2 "<th class=\"phr1\">[0-9]+</th>" | grep -vE '^[\-]+$' )
 			#echo "$Working_Data"
-			Working_Data="$( sed 's/\"/~~/g' <<< "$Working_Data")"
 			line_data=$(get_distro_data "$distro")
 			a_output[$counter]="$line_data"
 			((counter++))
 		done
 	else
-		Max_Count=17
 		while [ "$counter" -lt "$RANGE" ];do
 			if [ $RANGE_START -eq 100 ];then
 				item_nu=$((100 - $RANGE + $counter + 1))
 			else
 				item_nu=$((1 + $counter))
 			fi
-			Working_Data=$( grep -iE -A 2 "<th class=\"phr1\">$item_nu</th>" <<< "$DW_PAGE_DATA" )
+			Working_Data=$( grep -iE -A 2 "<th class=\"phr1\">$item_nu</th>" <<< "$DW_DATA" )
 			if [ -n "$Working_Data" ];then
 				distro=$( grep -iE '<td class="phr2">' <<< "$Working_Data" | sed -E 's/.*<a href="([^"?]+)(\?[^\"]*)?">.*/\1/' )
-				Working_Data="$( sed 's/\"/~~/g' <<< "$Working_Data")"
 				line_data=$(get_distro_data "$distro")
 				a_output[$counter]="$line_data"
 				# echo "$distro: $counter"
 				((counter++))
-				if [ $counter -gt $RANGE ];then
-					break
-				fi
+			fi
+			if [ $counter -gt $RANGE ];then
+				break
 			fi
 		done
 	fi
 	if [ "${#a_output[@]}" -gt 0 ];then
 		n=${#a_output[@]}
 		if [ "$RANGE_START" -eq 100 -a "$RANGE" -gt 0 ];then
-			while [ "$n" -ge 0 ]; do
-				output="$output${a_output[$n]}\n"
+			while [ "$n" -gt 0 ]; do
 				n=$((n - 1))
+				output="$output${a_output[$n]}\n"
 			done
 		else
 			local i=0
@@ -245,73 +254,63 @@ generate_distro_ranking()
 			done
 		fi
 		echo -e "$output"
+	else
+		error_handler 13
 	fi
 }
 
 # $1 - distro name;
 get_distro_data(){
-	local distro='' hit_data='' hits='' line_data='' ranking='' status=''
+	local distro='' distro_id='' hit_data='' hits='' line_data='' ranking='' status=''
 	#echo "$3"
-	# <td class=~~phr2~~><a href=~~freebsd?frphr~~>FreeBSD</a></td>
+	# <td class=\"phr2\"><a href=\"freebsd?frphr\">FreeBSD</a></td>
 	if [ -n "$Working_Data" ];then
-		distro=$( grep -iEA 1 "<td class=~~phr2~~>" <<< "$Working_Data" | grep -Eo '>[^<]+</a></td>' | sed -e 's/>//' -e 's%</a></td>%%g' )
-		ranking=$( grep -iE "<th class=~~phr1~~>[0-9]+</th>" <<< "$Working_Data" | grep -Eo '>[0-9]+<' | grep -Eo '[0-9]+' )
-		hits=$( grep -iEA 1 "<a href=~~$1(\?[^~]*)?~~>" <<< "$Working_Data" | grep -Eo '>[0-9]+<' | grep -Eo '[0-9]+' )
-		status=$( grep -iEA 1 "<a href=~~$1(\?[^~]*)?~~>" <<< "$Working_Data" | grep -ioE '(aup|alevel|adown)\.png' )
+		distro=$( grep -iE "<td class=\"phr2\">" <<< "$Working_Data" | sed -E 's|.*>([^<]+)</a></td>|\1|' )
+		ranking=$( grep -iE "<th class=\"phr1\">[0-9]+</th>" <<< "$Working_Data" | sed -E 's|.*>([0-9]+)<.*|\1|' )
+		hits=$( grep -iE "<td class=\"phr3\".*>" <<< "$Working_Data" | sed -E 's|.*>([0-9]+)<.*|\1|' )
+		status=$( grep -iE "<td class=\"phr3\".*>" <<< "$Working_Data" | sed -E 's/.*(aup|alevel|adown)\.png.*/\1/' )
+		# then make status nice for printout
+		case $status in
+			aup) status='+';;
+			adown)status='-';;
+			alevel)status='~';;
+		esac
 	fi
 	if [ -z "$distro" ];then
 		distro=$1
 	fi
-	# then make status nice for printout
-	case $status in
-		aup.png)	
-			status='+'
-			;;
-		adown.png)
-			status='-'
-			;;
-		alevel.png)
-			status='~'
-			;;
-	esac
 	# and set the status data
 	if [ -n "$hits" ];then
 		# note that many gui irc clients make ) stuff into emoticons
 		if [ "$B_TTY" == 'true' ];then
 			hit_data=" ($hits$status)"
+			distro_id="\t[$1]"
 		else
 			hit_data=" :: $hits$status"
+			distro_id=''
+			Max_Count=$(wc -c <<< "$distro:")
 		fi
 	fi
 	if [ "$B_DEBUG_1" == 'true' ];then
-		echo "Step 2: post wget data"
-		echo "$1 WorkingData: $Working_Data"
+		echo $LINE
+		echo "Debugger Step 2: build item data"
+		echo "$1 Working_Data: $Working_Data"
 		echo "distro: $distro"
 		echo "$1 ranking: $ranking"
 		echo "$1 hits: $hits"
 		echo "$1 status: $status"
-		echo "End Debugging"
 		echo $LINE
 	fi
-	
 	if [ -z "$Working_Data" ];then
-		if [ "$B_TTY" == 'true' ];then
-			line_data="$( printf "%-${Max_Count}s%s" "$distro:" "not ranked" )"
-		else
-			line_data="$( printf "%s: %s" "$distro" "not ranked" )"
-		fi
+		line_data="$( printf "%-${Max_Count}s%s" "$distro:" "not ranked" )"
 	else
-		if [ "$B_TTY" == 'true' ];then
-			line_data="$( printf "%-${Max_Count}s%s%s" "$distro:" "$ranking$hit_data" "\t[$1]" )"
-		else
-			line_data="$( printf "%s: %s%s" "$distro" "$ranking$hit_data" "\t[$1]" )"
-		fi
+		line_data="$( printf "%-${Max_Count}s%s%s" "$distro:" "$ranking$hit_data" "$distro_id" )"
 	fi
 	echo "$line_data"
 }
 
 show_help(){
-	echo "$SELF_NAME distrowatch distro position script. Version: $VERSION
+	echo "$SELF_NAME distrowatch distro position script. Version: $SELF_VERSION
 Your default with no options is range: $RANGE - time span: $TIME_SPAN
 $LINE
 $SELF_NAME script options ( any you want or none, like: $SELF_NAME -d arch -t 3 ):
@@ -359,7 +358,7 @@ Ubuntu Christian: -d ubuntuce
 
 # args: $1 - opt (option fired, exit. Optional)
 show_version(){
-	echo "Your current $SELF_NAME version is: $VERSION"
+	echo "Your current $SELF_NAME version is: $SELF_VERSION ($SELF_DATE)"
 	if [ "$1" == 'opt' ];then
 		exit 0
 	fi
