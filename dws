@@ -392,7 +392,6 @@ self_updater(){
 		show_version 'update'
 		echo $LINE
 		echo "Starting $SELF_NAME self updater."
-		echo "Current version: $SELF_VERSION ($SELF_DATE)"
 		# note that || case can't be in subshell...
 		self_data="$( wget -qO - $download_url )" || error_handler 5 "$?"
 		# try it again just in case it fails
