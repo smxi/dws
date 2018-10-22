@@ -71,7 +71,8 @@ DISTROS='debian,ubuntu,arch,antix' # show these distros by default
 RANGE=20 # show top 20 distros by default
 TIME_SPAN='6' # show last 6 months
 
-To make overrides permanent, put them into /etc/dws.conf 
+To make overrides permanent, put them into configuration file: 
+/etc/dws.conf 
 
 ====================================================================
 SAMPLES:
