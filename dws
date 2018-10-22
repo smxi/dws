@@ -275,6 +275,7 @@ get_distro_data(){
 			aup) status='+';;
 			adown)status='-';;
 			alevel)status='~';;
+			*)status='';; # required for no match cases
 		esac
 	fi
 	if [ -z "$distro" ];then
