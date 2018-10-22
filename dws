@@ -4,8 +4,8 @@
 # Description: show distrowatch distro position for different distros/time frames.
 # Author: Harald Hope
 SELF_NAME='dws'
-SELF_VERSION='1.4.1'
-SELF_DATE='2018-10-21'
+SELF_VERSION='1.4.2'
+SELF_DATE='2018-10-22'
 # License: GPL 3 or later
 # Bugs, issues, problems
 # Support forums: https://techpatterns.com/forums/forum-33.html
@@ -13,6 +13,7 @@ SELF_DATE='2018-10-21'
 # Issues: https://github.com/smxi/dws/issues
 
 ## Changes:
+# 1.4.2 2018-10-22 - cleaned up -U section
 # 1.4.1 2018-10-21 - cleaned up code, refactored, set default to -r 10; added /etc/dws.conf option
 # 1.4.0 2018-10-20 - added -r range, shows top or bottom x distros
 # 1.3.7 2018-10-19 - distrowatch table syntax change, they added ?frphr query string after distro id
@@ -368,7 +369,7 @@ self_updater(){
 	local self_location=$( which $SELF_NAME )
 	local self_owner=$( ls -l $self_location | awk '{print $3}' )
 	local download_url="https://smxi.org/$SELF_NAME"
-	local self_data='' new_version=''
+	local self_data='' new_version='' new_date=''
 	local self_user=$( whoami )
 	
 	if [ -n "$self_location" ];then
@@ -382,22 +383,24 @@ self_updater(){
 		show_version 'update'
 		echo $LINE
 		echo "Starting $SELF_NAME self updater."
+		echo "Current version: $SELF_VERSION ($SELF_DATE)"
 		# note that || case can't be in subshell...
-		self_data="$( wget -O - $download_url )" || error_handler 5 "$?"
+		self_data="$( wget -qO - $download_url )" || error_handler 5 "$?"
 		# try it again just in case it fails
 		if [ -z "$( grep '#\*\*EOF\*\*#' <<< "$self_data" )" ];then
 			echo "First download attempt failed, trying it again..."
 			echo
-			self_data="$( wget -O - $download_url )" || error_handler 5 "$?"
+			self_data="$( wget -qO - $download_url )" || error_handler 5 "$?"
 		fi
 		# echoing the file data to the user owned file works but stops
 		# or damages script execution, so a restart didn't work right.
 		if [ -n "$( grep '#\*\*EOF\*\*#' <<< "$self_data" )" ];then
 			echo "$self_data" > $self_location || error_handler 9 "echo: $?"
 			chmod +x $self_location || error_handler 9 "chmod: $?"
-			new_version=$(  grep '^#[[:space:]]Version:' $self_location | awk '{print $3}' )
+			new_date=$( awk -F '=' '/^SELF_DATE/ {gsub("\047","",$2);print $2;exit;}' $self_location)
+			new_version=$( awk -F '=' '/^SELF_VERSION/{gsub("\047","",$2);print $2;exit;}' $self_location)
 			echo $LINE
-			echo "Success! Restart $SELF_NAME to run updated version: $new_version"
+			echo "Success! Restart $SELF_NAME to run updated version: $new_version ($new_date)"
 			exit 0
 		else
 			error_handler 8

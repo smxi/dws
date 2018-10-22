@@ -77,7 +77,7 @@ This updates dws using github sources.
 ====================================================================
 OUTPUT FORMAT:
 
-From yeserday: + = rising; ~ = unchanged; - = falling. Does not show 
+From yesterday: + = rising; ~ = unchanged; - = falling. Does not show 
 for year output.
 
 Print Name: [ranking] (hits per day +~-) [working name, value for -d]
@@ -108,7 +108,7 @@ Default:
 dws
 Distrowatch.com 7 day rankings:
 elementary:      1 (2509+)      [elementary]
-Manjaro:         2 (2458+)      [manjaro]
+Manjaro:         2 (2458+)q      [manjaro]
 MX Linux:        3 (1521+)      [mx]
 Mint:            4 (1358+)      [mint]
 Ubuntu:          5 (1278+)      [ubuntu]
