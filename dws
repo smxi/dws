@@ -332,8 +332,10 @@ $SELF_NAME script options ( any you want or none, like: $SELF_NAME -d arch -t 3 
 -v - show $SELF_NAME current version
 $LINE
 Output format:
-From yeserday: + = rising; ~ = unchanged; - = falling. Does not show for year output.
-Print Distro Name: [ranking] (hits per day +~-) [working name, what you use for -d]
+From yeserday: + = rising; ~ = unchanged; - = falling. Does not show for year
+output.
+Print Distro Name: [ranking] (hits per day +~-) [working name, what you use for
+-d]
 $LINE
 You can change the script defaults at top of script variable settings to 
 what you want, just change the values of these top variables and $SELF_NAME 
@@ -376,7 +378,8 @@ self_updater(){
 		# check for root. Note that if parent dir is owned by root
 		# if you try to mv a file to that dir, it will require root
 		# permissions as well, even if the file is owned by user.
-		if [ "$self_user" != "root" -a "$self_owner" == 'root' ] || [ "$self_user" != "root" -a "$self_owner" != "$self_user" ];then
+		if [ "$self_user" != "root" -a "$self_owner" == 'root' ] || \
+		 [ "$self_user" != "root" -a "$self_owner" != "$self_user" ];then
 			error_handler 7
 		fi
 		echo $LINE
