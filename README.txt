@@ -2,8 +2,8 @@
 README for distrowatch.com stats tool: dws
 ====================================================================
 FILE:    README.txt
-VERSION: 1.1
-DATE:    2018-10-21
+VERSION: 1.2
+DATE:    2018-10-22
 
 ====================================================================
 
@@ -22,6 +22,11 @@ BASICS:
 
 dws is a simple tool designed to check either a set of distro names 
 or a top / bottom x number of distros from distrowatch.com.
+
+You can use either -r or -d, but not both. Default is -r 10, -t 7.
+
+--------------------------------------------------------------------
+-d distro list:
 
 The -d option is used like this:
 
@@ -46,10 +51,28 @@ SparkyLinux: -d sparky
 SUSE: -d sle
 Ubuntu Christian: -d ubuntuce
 
+-d overrides -r or configuration -r values.
+
+--------------------------------------------------------------------
+-r range:
+
+-r with a positive integer between 1 and 99 shows the top x distros.
+
+-r with a negative integer between -1 and -99 shows the bottom x
+distros.
+
+--------------------------------------------------------------------
+-t time span:
+
 The -t option sets the time interval. Accepts values 7 or 30 (days),
 3, 6, or 12 months, and years from 2002 to current year. Output will
 show for the requested interval. Default is 7 days. See below for 
 examples.
+
+--------------------------------------------------------------------
+-U update:
+
+This updates dws using github sources.
 
 ====================================================================
 OUTPUT FORMAT:
