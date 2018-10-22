@@ -229,7 +229,8 @@ generate_distro_ranking(){
 			fi
 			Working_Data=$( grep -iE -A 2 "<th class=\"phr1\">$item_nu</th>" <<< "$DW_DATA" )
 			if [ -n "$Working_Data" ];then
-				distro=$( grep -iE '<td class="phr2">' <<< "$Working_Data" | sed -E 's/.*<a href="([^"?]+)(\?[^\"]*)?">.*/\1/' )
+				distro=$( grep -iE '<td class="phr2">' <<< "$Working_Data" | grep -E '<a href="([^"?]+)(\?[^\"]*)?">' | \
+				sed -E 's/.*<a href="([^"?]+)(\?[^\"]*)?">.*/\1/' )
 				line_data=$(get_distro_data "$distro")
 				a_output[$counter]="$line_data"
 				# echo "$distro: $counter"
@@ -266,16 +267,20 @@ get_distro_data(){
 	#echo "$3"
 	# <td class=\"phr2\"><a href=\"freebsd?frphr\">FreeBSD</a></td>
 	if [ -n "$Working_Data" ];then
-		distro=$( grep -iE "<td class=\"phr2\">" <<< "$Working_Data" | sed -E 's|.*>([^<]+)</a></td>|\1|' )
-		ranking=$( grep -iE "<th class=\"phr1\">[0-9]+</th>" <<< "$Working_Data" | sed -E 's|.*>([0-9]+)<.*|\1|' )
-		hits=$( grep -iE "<td class=\"phr3\".*>" <<< "$Working_Data" | sed -E 's|.*>([0-9]+)<.*|\1|' )
-		status=$( grep -iE "<td class=\"phr3\".*>" <<< "$Working_Data" | sed -E 's/.*(aup|alevel|adown)\.png.*/\1/' )
+		distro=$( grep -iE "<td class=\"phr2\">" <<< "$Working_Data" | grep -E '>([^<]+)</a>' | \
+		sed -E 's|.*>([^<]+)</a></td>|\1|' )
+		ranking=$( grep -iE "<th class=\"phr1\">[0-9]+</th>" <<< "$Working_Data" | grep -E '>([0-9]+)<' | \
+		sed -E 's|.*>([0-9]+)<.*|\1|' )
+		hits=$( grep -iE "<td class=\"phr3\".*>" <<< "$Working_Data" | grep -E '>([0-9]+)<' | \
+		sed -E 's|.*>([0-9]+)<.*|\1|' )
+		status=$( grep -iE "<td class=\"phr3\".*>" <<< "$Working_Data" | grep -E '(aup|alevel|adown)\.png' | \
+		sed -E 's/.*(aup|alevel|adown)\.png.*/\1/' )
 		# then make status nice for printout
 		case $status in
 			aup) status='+';;
 			adown)status='-';;
 			alevel)status='~';;
-			*)status='';; # required for no match cases
+			*)status='';; # just in case somnething went wrong
 		esac
 	fi
 	if [ -z "$distro" ];then
