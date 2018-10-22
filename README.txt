@@ -108,7 +108,7 @@ Default:
 dws
 Distrowatch.com 7 day rankings:
 elementary:      1 (2509+)      [elementary]
-Manjaro:         2 (2458+)q      [manjaro]
+Manjaro:         2 (2458+)      [manjaro]
 MX Linux:        3 (1521+)      [mx]
 Mint:            4 (1358+)      [mint]
 Ubuntu:          5 (1278+)      [ubuntu]
