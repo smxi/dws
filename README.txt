@@ -2,19 +2,22 @@
 README for distrowatch.com stats tool: dws
 ====================================================================
 FILE:    README.txt
-VERSION: 1.2
-DATE:    2018-10-22
+VERSION: 1.3
+DATE:    2023-09-16
 
 ====================================================================
 
-git clone https://github.com/smxi/dws 
+Please create or file issues on codeberg.org, not github. 
+
+git clone https://codeberg.org/smxi/dws 
 
 Install dws. Note that the -U (update) option means that only the
 initial install is required:
 
-wget -O dws https://github.com/smxi/dws/raw/master/dws
+wget -O dws https://codeberg.org/smxi/dws/raw/master/dws
 
 Shortcut download path for github (easier to remember and type):
+
 wget -O dws smxi.org/dws
 
 ====================================================================

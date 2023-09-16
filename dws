@@ -4,15 +4,16 @@
 # Description: show distrowatch distro position for different distros/time frames.
 # Author: Harald Hope
 SELF_NAME='dws'
-SELF_VERSION='1.4.2'
-SELF_DATE='2018-10-22'
+SELF_VERSION='1.4.3'
+SELF_DATE='2023-09-16'
 # License: GPL 3 or later
 # Bugs, issues, problems
 # Support forums: https://techpatterns.com/forums/forum-33.html
 # IRC: irc.oftc.net channel #smxi
-# Issues: https://github.com/smxi/dws/issues
+# Issues: https://codeberg.org/smxi/dws/issues
 
 ## Changes:
+# 1.4.3 2023-09-16 - changed source url to codeberg.org
 # 1.4.2 2018-10-22 - cleaned up -U section
 # 1.4.1 2018-10-21 - cleaned up code, refactored, set default to -r 10; added /etc/dws.conf option
 # 1.4.0 2018-10-20 - added -r range, shows top or bottom x distros
