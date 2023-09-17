@@ -16,7 +16,7 @@ initial install is required:
 
 wget -O dws https://codeberg.org/smxi/dws/raw/master/dws
 
-Shortcut download path for github (easier to remember and type):
+Shortcut download path for codeberg (easier to remember and type):
 
 wget -O dws smxi.org/dws
 
@@ -75,7 +75,7 @@ examples.
 --------------------------------------------------------------------
 -U update:
 
-This updates dws using github sources.
+This updates dws using codeberg sources.
 
 ====================================================================
 OUTPUT FORMAT:
